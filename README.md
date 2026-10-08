@@ -1,36 +1,43 @@
 # BugHound — AI-Powered Code Debugging Agent
 
-**Student:** Sai Sandeep Kumar Vijayarao  
-**Course:** Foundations of AI Engineering, Spring 2026  
-**Unit:** 9 — Capstone Project  
-**Base project extended:** [codepath/ai110-module5tinker-bughound-starter](https://github.com/codepath/ai110-module5tinker-bughound-starter)
+A Streamlit app and small agent that scans a Python snippet, proposes a fix (Gemini or offline heuristics), and scores the fix's risk before deciding whether it is safe to auto-apply.
+
+![BugHound analyzing mixed_issues.py in heuristic mode](docs/screenshot.png)
+
+> **Coursework.** This is my Unit 9 capstone for CodePath AI110 (Foundations of AI Engineering, Spring 2026). It extends CodePath's [BugHound starter](https://github.com/codepath/ai110-module5tinker-bughound-starter): the agent loop, Streamlit UI, Gemini client, prompts and heuristics come from the starter. My changes are listed below.
+
+**Student:** Sai Sandeep Kumar Vijayarao
+**Course:** Foundations of AI Engineering (CodePath AI110), Spring 2026
+**Unit:** 9 — Capstone Project
 
 ---
 
-## Original System: What BugHound Started As
+## What the starter already had
 
-BugHound is a small agentic debugging assistant that takes a Python snippet and runs a five-step workflow: **plan → analyze → act → test → reflect**. In its starter form it could:
+The starter runs a five-step workflow, **plan → analyze → act → test → reflect**, and already included:
 
-- Detect three classes of issues using hard-coded heuristics (bare `except:`, `print()` statements, `TODO` comments)
-- Propose a mechanical fix (replace `except:` with `except Exception as e:`, swap `print` for `logging.info`)
-- Score the proposed fix using a simple rule-based risk assessor
-- Decide whether the fix was safe enough to auto-apply
+- a `GeminiClient` (google-genai) used by both the analyzer and fixer steps, plus an offline `MockClient`;
+- fallback to heuristics when the LLM returns non-JSON, errors out, or returns an empty fix;
+- three heuristic checks (bare `except:`, `print()`, `TODO` comments) and a heuristic fixer;
+- a rule-based risk assessor (severity deductions, structural-change checks, auto-fix only at "low" risk);
+- the Streamlit UI and 8 unit tests.
 
-The starter system had no LLM integration, no fallback safety for bad AI output, and a risk assessor that could approve a fix even when it introduced new dependencies.
+## Starter vs my changes
 
----
+Compared with the starter as of 2026-04-27 (commit `5a16038`, the last upstream commit before this repo was created).
 
-## What Was Extended and Added
+| Area | Starter | My change | Where |
+|---|---|---|---|
+| LLM output validation | Falls back on non-JSON output only | Also falls back when most returned issues have an empty `msg` (6 lines) | `bughound_agent.py` |
+| Risk: new imports | Not considered | Each import line the fix adds costs 10 points and adds a reason | `reliability/risk_assessor.py` |
+| Auto-fix policy | Auto-fix when level is "low" (score ≥ 75) | Auto-fix only when score ≥ 80 | `reliability/risk_assessor.py` |
+| Heuristic mode in the UI | Used `MockClient`, so the "fix" shown was a placeholder comment | Runs the agent with no client, so the real heuristic fixer produces the fix | `bughound_app.py` |
+| Tests | 8 unit tests | 4 more covering the new guardrails (12 total) | `tests/test_risk_assessor.py` |
+| Evaluation | None | `eval/evaluate.py`: 20 offline checks across detection, fixing, risk scoring and fallback | `eval/` |
+| Model card | Template | Filled in: failure modes, reliability rules, improvement proposals | `model_card.md` |
+| Tooling | — | `pytest.ini`, GitHub Actions running pytest and the eval harness | `.github/workflows/` |
 
-| Area | Change |
-|---|---|
-| **AI Integration** | Gemini API wired into both the analyzer and fixer steps; heuristics serve as verified fallback |
-| **LLM Output Validation** | New quality gate: agent falls back to heuristics when LLM returns issues with mostly-empty `msg` fields |
-| **Risk Signal — New Imports** | Each import line added by the fix deducts 10 points from the risk score |
-| **Stricter Auto-fix Threshold** | Raised from `score >= 75` to `score >= 80` to reduce confident-but-wrong auto-fixes |
-| **Evaluation Harness** | `eval/evaluate.py` runs 20 offline checks across detection, fixing, risk scoring, and fallback behaviour |
-| **Expanded Test Suite** | 4 new unit tests added to `tests/test_risk_assessor.py` covering all new guardrails |
-| **Model Card** | `model_card.md` documents failure modes, reliability rules, and improvement proposals |
+![Proposed fix, unified diff and agent trace](docs/proposed-fix.png)
 
 ---
 
@@ -139,7 +146,7 @@ In the sidebar:
 ## Running Tests
 
 ```bash
-pytest                    # 12 unit tests
+pytest                    # 12 unit tests, no API key needed
 python eval/evaluate.py   # 20-check evaluation harness (offline)
 ```
 
@@ -183,6 +190,8 @@ Expected output from the evaluation harness:
 
 ## Sample Inputs and Outputs
 
+Produced by the agent in heuristic mode (`BugHoundAgent(client=None)`), which is what the app's "Heuristic only" setting runs.
+
 ### Input 1 — `sample_code/flaky_try_except.py`
 
 ```python
@@ -209,6 +218,7 @@ def load_text_file(path):
     except Exception as e:
         # [BugHound] log or handle the error
         return None
+
     return data
 ```
 
@@ -234,8 +244,10 @@ def compute_ratio(x, y):
 - Code Quality | Low — print statement
 - Maintainability | Medium — TODO comment
 
-**Risk report:** Score: 30 | Level: HIGH | Auto-fix: NO  
-Reasons: High severity (−40), Medium severity (−20), Low severity (−5), bare except modified (−5)
+**Proposed fix (heuristic):** adds `import logging`, swaps `print` for `logging.info`, and replaces the bare `except:`.
+
+**Risk report:** Score: 20 | Level: HIGH | Auto-fix: NO  
+Reasons: High severity (−40), Medium severity (−20), Low severity (−5), bare except modified (−5), 1 new import (−10)
 
 ---
 
@@ -286,3 +298,9 @@ An early Copilot suggestion for the heuristic fixer used `str.replace("except:",
 3. **Tiered risk model** — multiply severity weights rather than adding them; two Medium issues should not equal one High in actual risk.
 4. **Sensitive-operation keyword block** — if the code contains words like `password`, `token`, `payment`, or `delete`, unconditionally block auto-fix regardless of score.
 5. **Issue count cap on LLM output** — if the LLM returns more than 8 issues, treat the response as over-sensitive and fall back to heuristics.
+
+---
+
+## License
+
+My changes are [MIT](LICENSE). The starter code belongs to CodePath.

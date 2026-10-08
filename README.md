@@ -1,5 +1,7 @@
 # BugHound — AI-Powered Code Debugging Agent
 
+[![Tests](https://github.com/sandeepvijayarao09/a1110-week9/actions/workflows/tests.yml/badge.svg)](https://github.com/sandeepvijayarao09/a1110-week9/actions/workflows/tests.yml)
+
 A Streamlit app and small agent that scans a Python snippet, proposes a fix (Gemini or offline heuristics), and scores the fix's risk before deciding whether it is safe to auto-apply.
 
 ![BugHound analyzing mixed_issues.py in heuristic mode](docs/screenshot.png)

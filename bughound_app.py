@@ -4,7 +4,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from bughound_agent import BugHoundAgent
-from llm_client import GeminiClient, MockClient
+from llm_client import GeminiClient
 
 # ----------------------------
 # App setup
@@ -117,8 +117,10 @@ client = None
 client_status = ""
 
 if mode == "Heuristic only (no API)":
-    client = MockClient()
-    client_status = "Using MockClient. No network calls."
+    # client=None runs the agent's heuristic analyzer and fixer directly.
+    # MockClient would return a placeholder comment as the "fix".
+    client = None
+    client_status = "Heuristic rules only. No network calls."
 else:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
